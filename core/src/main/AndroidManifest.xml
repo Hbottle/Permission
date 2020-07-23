@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.bottle.core">
+    <application>
+        <activity
+            android:name=".arch.permission.PermissionActivity"
+            android:theme="@style/DialogTheme" />
+    </application>
+</manifest>
