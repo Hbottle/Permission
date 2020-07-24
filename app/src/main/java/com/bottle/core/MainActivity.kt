@@ -19,20 +19,21 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
             Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                    .setAction("Action", null).show()
+                .setAction("Action", null).show()
         }
 
         val permissions = arrayOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            Manifest.permission.READ_EXTERNAL_STORAGE)
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        )
         AndroidPermission()
             .permission(permissions)
-            .onDenied{
+            .onDenied {
                 AndroidPermission.appSettingPage(this, 1010, permissions)
             }
-            .onGranted{
+            .onGranted {
                 Toast.makeText(this@MainActivity, "成功获取权限", Toast.LENGTH_LONG).show()
             }
             .start(this)

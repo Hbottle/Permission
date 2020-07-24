@@ -2,6 +2,7 @@ package com.bottle.core.arch.permission
 
 import android.os.Build
 import android.os.Bundle
+import android.text.TextUtils
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 
@@ -13,7 +14,7 @@ const val CODE_PERMISSION = 101
 class PermissionActivity : AppCompatActivity() {
 
     private lateinit var mPermissions: Array<String>
-    private var androidPermissionHashCode: Int = -1
+    private var androidPermissionHashCode: String = ""
     private var mAndroidPermission: AndroidPermission? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,8 +45,8 @@ class PermissionActivity : AppCompatActivity() {
 
     private fun initBundle(bundle: Bundle) {
         mPermissions = bundle[KEY_PERMISSIONS] as Array<String>
-        androidPermissionHashCode = intent.getIntExtra(KEY_ANDROID_PERMISSION, -1)
-        if (androidPermissionHashCode != -1) {
+        androidPermissionHashCode = intent.getStringExtra(KEY_ANDROID_PERMISSION)!!
+        if (!TextUtils.isEmpty(androidPermissionHashCode)) {
             mAndroidPermission = AndroidPermission.androidPermissions[androidPermissionHashCode]
         }
         require(!mPermissions.isNullOrEmpty()) { "there have no permission!" }

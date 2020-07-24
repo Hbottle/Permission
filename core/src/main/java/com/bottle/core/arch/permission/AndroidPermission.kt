@@ -9,13 +9,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import androidx.annotation.MainThread
 import com.bottle.core.R
-import com.bottle.core.arch.async.ThreadPoolManager
-import com.bottle.core.arch.workflow.OnProcedureListener
-import com.bottle.core.arch.workflow.Procedure
-import com.bottle.core.arch.workflow.Task
 import java.io.Serializable
+import java.util.UUID
 
 internal val MARK = Build.MANUFACTURER.toLowerCase()
 
@@ -28,6 +25,39 @@ internal val MARK = Build.MANUFACTURER.toLowerCase()
  * 第三，自己写比较可控一些，有什么要改也的方便。
  * 原理比较简单，申请权限时打开一个透明的Activity，在这个Activity里面申请，收到onRequestPermissionsResult
  * 回调后，再处理结果，然后通过回调告知调用者是结果(onGranted or onDenied)。
+ *
+ * example 1:
+ *
+val permissions = arrayOf(
+Manifest.permission.CAMERA,
+Manifest.permission.RECORD_AUDIO,
+Manifest.permission.WRITE_EXTERNAL_STORAGE,
+Manifest.permission.READ_EXTERNAL_STORAGE
+)
+AndroidPermission()
+.permission(permissions)
+.onDenied {
+AndroidPermission.appSettingPage(this, 1010, permissions)
+}
+.onGranted {
+initData()
+}
+.start(this)
+
+ example 2:
+AndroidPermission().apply {
+this.mPermissions = permissions
+this.mTips = "为了使用相册，请开启SD卡，Camera权限"
+this.mOnDenied = {
+AndroidPermission.appSettingPage(
+this@AlbumActivity, 1010, permissions,
+"缺少必要的权限，app可能无法使用，是否要打开设置页面开启权限？"
+)
+}
+this.mOnGranted = {
+initData()
+}
+}.start(this)
  */
 
 fun resolveActivity(intent: Intent, context: Context): Boolean {
@@ -43,72 +73,35 @@ class AndroidPermission() : Serializable {
 
     companion object {
 
-        val androidPermissions = mutableMapOf<Int, AndroidPermission>()
+        val androidPermissions = mutableMapOf<String, AndroidPermission>()
+
         /**
          * 打开app设置页面
          * @return 由于不同厂商的设置页面可能不一样，不一定适配到，所以如果找不到就返回false
          */
-        fun appSettingPage(activity: Activity, requestCode: Int, permissions: Array<String>): Boolean {
-            val intent = getAlertWindowSettingIntent(activity)
-            if (!resolveActivity(intent, activity)) {
+        @MainThread
+        fun appSettingPage(
+            ac: Activity,
+            requestCode: Int,
+            permissions: Array<String>,
+            tips: String = ""
+        ): Boolean {
+            val intent = getAlertWindowSettingIntent(ac)
+            if (!resolveActivity(intent, ac)) {
                 return false
             }
-            Procedure().apply {
-                addTask(Task("1") {
-                    ThreadPoolManager.main().execute(Runnable {
-                        AlertDialog.Builder(activity)
-                            .setMessage(
-                                appSettings(
-                                    activity,
-                                    permissions
-                                )
-                            )
-                            .setNegativeButton(activity.getString(R.string.cancel)){
-                                    dialog: DialogInterface, _: Int ->
-                                dialog.dismiss()
-                                it.cancel()
-                            }
-                            .setPositiveButton(activity.getString(R.string.ok))
-                            { dialog: DialogInterface, _: Int ->
-                                dialog.dismiss()
-                                it.complete()
-                            }
-                            .setCancelable(false)
-                            .create()
-                            .show()
-                    })
-                })
-                addTaskByPreTaskName(arrayOf("1"), Task("2") {
-                    ThreadPoolManager.main().execute(Runnable {
-                        activity.startActivityForResult(intent, requestCode)
-                        it.complete()
-                    })
-                })
-            }.start(object : OnProcedureListener {
-                override fun onBlockCompleted(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onBlockCompleted")
+            AlertDialog.Builder(ac)
+                .setMessage(appSettings(ac, permissions, tips))
+                .setNegativeButton(ac.getString(R.string.cancel)) { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
                 }
-
-                override fun onBlockFailed(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onBlockFailed")
+                .setPositiveButton(ac.getString(R.string.ok)) { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
+                    ac.startActivityForResult(intent, requestCode)
                 }
-
-                override fun onCompleted() {
-                    Log.d(AndroidPermission::class.java.simpleName, "onCompleted")
-                }
-
-                override fun onFailed(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onFailed")
-                }
-
-                override fun onCancel(code: Int, reason: String) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onCancel")
-                }
-
-                override fun onProgress(task: Task, progress: Int, desc: String?) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onProgress")
-                }
-            })
+                .setCancelable(false)
+                .create()
+                .show()
             return true
         }
 
@@ -116,75 +109,43 @@ class AndroidPermission() : Serializable {
          * 打开app悬浮框权限页面，该权限必须要到Settings设置，所以可以先弹框告诉用户，然后再跳转
          * @return 由于不同厂商的设置页面可能不一样，不一定适配到，所以如果找不到就返回false
          */
+        @MainThread
         fun overlaySettingPage(activity: Activity, requestCode: Int): Boolean {
             val intent = overlaySettingIntent(activity)
             if (!resolveActivity(intent, activity)) {
                 return false
             }
-            Procedure().apply {
-                addTask(Task("1") {
-                    ThreadPoolManager.main().execute(Runnable {
-                        val permission = arrayListOf(Manifest.permission.SYSTEM_ALERT_WINDOW)
-                        AlertDialog.Builder(activity)
-                            .setMessage(
-                                rationale(
-                                    activity,
-                                    permission
-                                )
-                            )
-                            .setNegativeButton(activity.getString(R.string.cancel)) { dialog: DialogInterface, _: Int ->
-                                dialog.dismiss()
-                                it.cancel()
-                            }
-                            .setPositiveButton(activity.getString(R.string.ok))
-                            { dialog: DialogInterface, _: Int ->
-                                dialog.dismiss()
-                                it.complete()
-                            }
-                            .setCancelable(false)
-                            .create()
-                            .show()
-                    })
-                })
-                addTaskByPreTaskName(arrayOf("1"), Task("2") {
-                    ThreadPoolManager.main().execute(Runnable {
-                        activity.startActivityForResult(intent, requestCode)
-                        it.complete()
-                    })
-                })
-            }.start(object : OnProcedureListener {
-                override fun onBlockCompleted(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onBlockCompleted")
+            val permission = arrayListOf(Manifest.permission.SYSTEM_ALERT_WINDOW)
+            AlertDialog.Builder(activity)
+                .setMessage(rationale(activity, permission))
+                .setNegativeButton(activity.getString(R.string.cancel)) { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
                 }
-
-                override fun onBlockFailed(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onBlockFailed")
+                .setPositiveButton(activity.getString(R.string.ok)) { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
+                    activity.startActivityForResult(intent, requestCode)
                 }
-
-                override fun onCompleted() {
-                    Log.d(AndroidPermission::class.java.simpleName, "onCompleted")
-                }
-
-                override fun onFailed(task: Task) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onFailed")
-                }
-
-                override fun onCancel(code: Int, reason: String) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onCancel")
-                }
-
-                override fun onProgress(task: Task, progress: Int, desc: String?) {
-                    Log.d(AndroidPermission::class.java.simpleName, "onProgress")
-                }
-            })
+                .setCancelable(false)
+                .create()
+                .show()
             return true
         }
 
     }
 
-    private lateinit var mPermissions: Array<String>
-    private var mOnDenied: (Array<String>) -> Unit = {}
-    private var mOnGranted: (Array<String>) -> Unit = {}
+    lateinit var mPermissions: Array<String>
+
+    /**
+     * 提示用户，为什么要用这些权限(建议使用自定义的提示，内置的提示没有翻译)
+     */
+    var mTips: String = ""
+    var mOnDenied: (Array<String>) -> Unit = {}
+    var mOnGranted: (Array<String>) -> Unit = {}
+
+    /**
+     * 申请权限时，是否显示提示(mTips)
+     */
+    var showTipsOnFirstTime: Boolean = true
 
     fun permission(permissions: Array<String>): AndroidPermission {
         mPermissions = permissions
@@ -201,75 +162,53 @@ class AndroidPermission() : Serializable {
         return this
     }
 
+    fun tips(tips: String): AndroidPermission {
+        mTips = tips
+        return this
+    }
+
+    fun showTipsOnFirstTime(showOnFirst: Boolean): AndroidPermission {
+        this.showTipsOnFirstTime = showOnFirst
+        return this
+    }
+
+    @MainThread
     fun start(activity: Activity) {
-        // TODO 1.Android 6.0以前不需要申请
+        // 1.Android 6.0以前不需要申请
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             mOnGranted.invoke(mPermissions)
             return
         }
-        // TODO 2.如果已经获取了权限，那么不需要再申请
+        // 2.如果已经获取了权限，那么不需要再申请
         val granted = filterGranted(activity, mPermissions)
         if (granted.size == mPermissions.size) {
             mOnGranted.invoke(mPermissions)
             return
         }
         val rationale = filterRationale(activity, mPermissions)
-        // TODO 3.如果是第一次申请权限，则直接申请即可
-        if (rationale.isEmpty()) {
+        // 3.如果是第一次申请权限，则直接申请即可
+        if (rationale.isEmpty() && !showTipsOnFirstTime) {
             requestPermission(activity)
             return
         }
-        // TODO 4.如果需要提示用户(第一次拒绝了，后面每次请求都会提示)为什么申请该权限，则提示
-        Procedure().apply {
-            addTask(Task("1") { node ->
-                ThreadPoolManager.main().execute(Runnable {
-                    AlertDialog.Builder(activity)
-                        .setMessage(
-                            rationale(
-                                activity,
-                                rationale
-                            )
-                        )
-                        .setPositiveButton(activity.getString(R.string.ok))
-                        { dialog: DialogInterface, _: Int ->
-                            dialog.dismiss()
-                            node.complete()
-                        }
-                        .setCancelable(false)
-                        .create()
-                        .show()
-                })
-            })
-            addTaskByPreTaskName(arrayOf("1"), Task("2") {
+        if (rationale.isEmpty()) {
+            for (p in mPermissions) {
+                rationale.add(p)
+            }
+        }
+        // 4.如果需要提示用户(第一次拒绝了，后面每次请求都会提示)为什么申请该权限，则提示
+        AlertDialog.Builder(activity)
+            .setMessage(rationale(activity, rationale, mTips))
+            .setPositiveButton(activity.getString(R.string.ok)) { dialog: DialogInterface, _: Int ->
+                dialog.dismiss()
                 requestPermission(activity)
-                it.complete()
-            })
-        }.start(object : OnProcedureListener {
-            override fun onBlockCompleted(task: Task) {
-                Log.d(AndroidPermission::class.java.simpleName, "onBlockCompleted")
             }
-
-            override fun onBlockFailed(task: Task) {
-                Log.d(AndroidPermission::class.java.simpleName, "onBlockFailed")
+            .setNegativeButton(R.string.cancel) { dialog: DialogInterface, _: Int ->
+                dialog.dismiss()
             }
-
-            override fun onCompleted() {
-                Log.d(AndroidPermission::class.java.simpleName, "onCompleted")
-            }
-
-            override fun onFailed(task: Task) {
-                Log.d(AndroidPermission::class.java.simpleName, "onFailed")
-            }
-
-            override fun onCancel(code: Int, reason: String) {
-                Log.d(AndroidPermission::class.java.simpleName, "onCancel")
-            }
-
-            override fun onProgress(task: Task, progress: Int, desc: String?) {
-                Log.d(AndroidPermission::class.java.simpleName, "onProgress")
-            }
-
-        })
+            .setCancelable(false)
+            .create()
+            .show()
     }
 
     internal fun granted(permissions: Array<String>) {
@@ -285,8 +224,7 @@ class AndroidPermission() : Serializable {
         val data = Bundle()
         data.putSerializable(KEY_PERMISSIONS, mPermissions)
         intent.putExtra(KEY_BUNDLE, data)
-        // FIXME 请确保hashcode的唯一性
-        val hashCode = hashCode()
+        val hashCode = UUID.randomUUID().toString()
         intent.putExtra(KEY_ANDROID_PERMISSION, hashCode)
         androidPermissions[hashCode] = this
         mContext.startActivity(intent)

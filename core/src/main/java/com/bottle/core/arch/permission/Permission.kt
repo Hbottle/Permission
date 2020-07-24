@@ -6,10 +6,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.core.content.ContextCompat
 import com.bottle.core.R
 import java.lang.StringBuilder
-import java.util.*
+import java.util.Arrays
 import kotlin.collections.ArrayList
 
 /**
@@ -115,7 +116,10 @@ fun filterRationale(context: Activity, permissions: Array<out String>): ArrayLis
     return rationale
 }
 
-fun rationale(context: Context, rationale: ArrayList<String>): String {
+fun rationale(context: Context, rationale: ArrayList<String>, tips: String = ""): String {
+    if (!TextUtils.isEmpty(tips)) {
+        return tips
+    }
     val toast = transformText(context, rationale)
     var format = context.getString(R.string.permission_message_permission_rationale)
     val sb = StringBuilder()
@@ -129,7 +133,10 @@ fun rationale(context: Context, rationale: ArrayList<String>): String {
     return String.format(format, permissions.substring(0, permissions.length - 2))
 }
 
-fun appSettings(context: Context, permissions: Array<String>): String {
+fun appSettings(context: Context, permissions: Array<String>, tips: String = ""): String {
+    if (!TextUtils.isEmpty(tips)) {
+        return tips;
+    }
     val toast = transformText(context, permissions)
     var format = context.getString(R.string.permission_jump_settings_page)
     val sb = StringBuilder()
