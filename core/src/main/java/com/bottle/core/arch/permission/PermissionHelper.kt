@@ -14,51 +14,11 @@ import com.bottle.core.R
 import java.io.Serializable
 import java.util.UUID
 
-internal val MARK = Build.MANUFACTURER.toLowerCase()
-
 /**
  * Android 运行时权限，参考了<a href="https://github.com/yanzhenjie/AndroidPermission">AndroidPermission</a>
- * 还有<a href="https://mp.weixin.qq.com/s/sKRe_jyFBYEDIKdgjz7rZQ">鸿神的这篇博客</a>
- * 之所以重复造一个轮子：
- * 第一AndPermission是Java，我要写的是Kotlin；
- * 第二，AndPermission有点复杂，希望可以简化一下；
- * 第三，自己写比较可控一些，有什么要改也的方便。
- * 原理比较简单，申请权限时打开一个透明的Activity，在这个Activity里面申请，收到onRequestPermissionsResult
- * 回调后，再处理结果，然后通过回调告知调用者是结果(onGranted or onDenied)。
- *
- * example 1:
- *
-val permissions = arrayOf(
-Manifest.permission.CAMERA,
-Manifest.permission.RECORD_AUDIO,
-Manifest.permission.WRITE_EXTERNAL_STORAGE,
-Manifest.permission.READ_EXTERNAL_STORAGE
-)
-AndroidPermission()
-.permission(permissions)
-.onDenied {
-AndroidPermission.appSettingPage(this, 1010, permissions)
-}
-.onGranted {
-initData()
-}
-.start(this)
-
- example 2:
-AndroidPermission().apply {
-this.mPermissions = permissions
-this.mTips = "为了使用相册，请开启SD卡，Camera权限"
-this.mOnDenied = {
-AndroidPermission.appSettingPage(
-this@AlbumActivity, 1010, permissions,
-"缺少必要的权限，app可能无法使用，是否要打开设置页面开启权限？"
-)
-}
-this.mOnGranted = {
-initData()
-}
-}.start(this)
  */
+
+internal val MARK = Build.MANUFACTURER.toLowerCase()
 
 fun resolveActivity(intent: Intent, context: Context): Boolean {
     return intent.resolveActivity(context.packageManager) != null
@@ -69,11 +29,11 @@ fun hasActivity(context: Context, intent: Intent): Boolean {
     return packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).size > 0
 }
 
-class AndroidPermission() : Serializable {
+class PermissionHelper() : Serializable {
 
     companion object {
 
-        val androidPermissions = mutableMapOf<String, AndroidPermission>()
+        val androidPermissions = mutableMapOf<String, PermissionHelper>()
 
         /**
          * 打开app设置页面
@@ -147,27 +107,27 @@ class AndroidPermission() : Serializable {
      */
     var showTipsOnFirstTime: Boolean = true
 
-    fun permission(permissions: Array<String>): AndroidPermission {
+    fun permission(permissions: Array<String>): PermissionHelper {
         mPermissions = permissions
         return this
     }
 
-    fun onGranted(action: (Array<String>) -> Unit): AndroidPermission {
+    fun onGranted(action: (Array<String>) -> Unit): PermissionHelper {
         mOnGranted = action
         return this
     }
 
-    fun onDenied(action: (Array<String>) -> Unit): AndroidPermission {
+    fun onDenied(action: (Array<String>) -> Unit): PermissionHelper {
         mOnDenied = action
         return this
     }
 
-    fun tips(tips: String): AndroidPermission {
+    fun tips(tips: String): PermissionHelper {
         mTips = tips
         return this
     }
 
-    fun showTipsOnFirstTime(showOnFirst: Boolean): AndroidPermission {
+    fun showTipsOnFirstTime(showOnFirst: Boolean): PermissionHelper {
         this.showTipsOnFirstTime = showOnFirst
         return this
     }

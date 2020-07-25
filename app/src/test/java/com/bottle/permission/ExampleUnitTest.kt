@@ -1,4 +1,4 @@
-package com.bottle.core
+package com.bottle.permission
 
 import org.junit.Test
 

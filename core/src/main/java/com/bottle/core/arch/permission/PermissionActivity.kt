@@ -15,7 +15,7 @@ class PermissionActivity : AppCompatActivity() {
 
     private lateinit var mPermissions: Array<String>
     private var androidPermissionHashCode: String = ""
-    private var mAndroidPermission: AndroidPermission? = null
+    private var mPermissionHelper: PermissionHelper? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,12 +34,12 @@ class PermissionActivity : AppCompatActivity() {
         }
         val denied = filterDenied(this, arg)
         if (denied.isEmpty()) {
-            mAndroidPermission?.granted(mPermissions)
+            mPermissionHelper?.granted(mPermissions)
         } else {
-            mAndroidPermission?.denied(denied.toTypedArray())
+            mPermissionHelper?.denied(denied.toTypedArray())
         }
-        mAndroidPermission = null
-        AndroidPermission.androidPermissions.remove(androidPermissionHashCode)
+        mPermissionHelper = null
+        PermissionHelper.androidPermissions.remove(androidPermissionHashCode)
         finish()
     }
 
@@ -47,7 +47,7 @@ class PermissionActivity : AppCompatActivity() {
         mPermissions = bundle[KEY_PERMISSIONS] as Array<String>
         androidPermissionHashCode = intent.getStringExtra(KEY_ANDROID_PERMISSION)!!
         if (!TextUtils.isEmpty(androidPermissionHashCode)) {
-            mAndroidPermission = AndroidPermission.androidPermissions[androidPermissionHashCode]
+            mPermissionHelper = PermissionHelper.androidPermissions[androidPermissionHashCode]
         }
         require(!mPermissions.isNullOrEmpty()) { "there have no permission!" }
     }
@@ -56,8 +56,8 @@ class PermissionActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             ActivityCompat.requestPermissions(this, mPermissions, CODE_PERMISSION)
         } else {
-            mAndroidPermission = null
-            AndroidPermission.androidPermissions.remove(androidPermissionHashCode)
+            mPermissionHelper = null
+            PermissionHelper.androidPermissions.remove(androidPermissionHashCode)
             finish()
         }
     }
